@@ -5,6 +5,7 @@ const {
 const bcryptjs = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const userModel = require("./userModel");
+const config = require("../config");
 
 class UserController {
   constructor() {
@@ -47,10 +48,7 @@ class UserController {
       return res.status(409).send(error);
     }
 
-    const hashedPassword = await bcryptjs.hash(
-      password,
-      (this._costFactor = 4)
-    );
+    const hashedPassword = await bcryptjs.hash(password, this._costFactor);
 
     const userInBase = await userModel.create({
       email,
@@ -82,7 +80,7 @@ class UserController {
       error.message = "Email or password is wrong";
       return res.status(401).send(error);
     }
-    const token = await jwt.sign({ _id: userInBase._id }, "secret");
+    const token = await jwt.sign({ _id: userInBase._id }, config.tokenSecret);
     await userModel.updateToken(userInBase._id, token);
     const user = {
       email: userInBase.email,
@@ -98,7 +96,7 @@ class UserController {
 
       let userId;
       try {
-        userId = await jwt.verify(token, "secret")._id;
+        userId = await jwt.verify(token, config.tokenSecret)._id;
       } catch (err) {
         const error = new Error();
         error.message = "Not authorized";
@@ -138,24 +136,16 @@ class UserController {
   async updateSubscription(req, res, next) {
     try {
       const userId = req.params.userId;
-      const subscriptionType = req.body;
-      const subscriptionTypeValue = Object.values(subscriptionType);
-      console.log(subscriptionTypeValue[0]);
-      console.log(typeof subscriptionTypeValue[0]);
+      const { subscription } = req.body;
 
-      if (
-        subscriptionTypeValue[0] !== "free" &&
-        subscriptionTypeValue[0] !== "pro" &&
-        subscriptionTypeValue[0] !== "premium"
-      ) {
+      if (!["fre", "pro", "premium"].includes(subscription)) {
         const error = new Error();
-        error.message = "Bad requiest(";
+        error.message = "Bad request";
         return res.status(400).send(error);
       }
-      const updatedUser = await userModel.findUserByIdAndUpdate(
-        userId,
-        subscriptionType
-      );
+      const updatedUser = await userModel.findUserByIdAndUpdate(userId, {
+        subscription,
+      });
 
       if (!updatedUser) {
         const error = new Error();
