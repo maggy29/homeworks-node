@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const contactRouter = require("./contact/contactRouter");
+const userRouter = require("./users/userRouter");
 
 const PORT = 3001;
 const DB_URL =
@@ -29,6 +30,7 @@ module.exports = class ContactsServer {
 
   initRouters() {
     this.server.use("/api/contacts", contactRouter);
+    this.server.use("/api/users", userRouter);
   }
 
   async initDatabase() {
