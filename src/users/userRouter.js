@@ -1,13 +1,14 @@
 const { Router } = require("express");
 const errorWrapper = require("../HOC/errorWrapper");
 const userController = require("./userController");
+const upload = require("../helpers/multer");
 
 const userRouter = Router();
 
 userRouter.post(
   "/auth/register",
   userController.validateRegisterAndLogin,
-  errorWrapper(userController.register)
+  userController.register
 );
 
 userRouter.post(
@@ -26,8 +27,10 @@ userRouter.get(
   errorWrapper(userController.getCurrent)
 );
 userRouter.patch(
-  "/:userId/update-sub",
-  userController.validateUserId,
-  userController.updateSubscription
+  "/avatars",
+  upload.single("avatar"),
+  errorWrapper(userController.authorize),
+  errorWrapper(userController.updateSubscriptionOrAvatar)
 );
+
 module.exports = userRouter;
