@@ -31,6 +31,7 @@ module.exports = class ContactsServer {
   initRouters() {
     this.server.use("/api/contacts", contactRouter);
     this.server.use("/api/users", userRouter);
+    this.server.use(express.static("public"));
   }
 
   async initDatabase() {

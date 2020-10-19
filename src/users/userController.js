@@ -3,9 +3,16 @@ const {
   Types: { ObjectId },
 } = require("mongoose");
 const bcryptjs = require("bcryptjs");
+const Avatar = require("avatar-builder");
 const jwt = require("jsonwebtoken");
 const userModel = require("./userModel");
 const config = require("../config");
+const path = require("path");
+const fs = require("fs");
+const moveFiles = require("../helpers/moveFiles");
+const imagemin = require("../helpers/imagemin");
+const generateFilename = require("../helpers/generateFilename");
+const { min } = require("lodash");
 
 class UserController {
   constructor() {
@@ -50,15 +57,28 @@ class UserController {
 
     const hashedPassword = await bcryptjs.hash(password, this._costFactor);
 
+    const avatar = Avatar.githubBuilder(128);
+
+    avatar
+      .create(email)
+      .then((buffer) => fs.writeFileSync(`${email}.png`, buffer));
+
+    await moveFiles(
+      path.join(process.cwd(), `${email}.png`),
+      path.join(process.cwd(), "public", "images", `${email}.png`)
+    );
+
     const userInBase = await userModel.create({
       email,
       subscription,
       password: hashedPassword,
+      avatarURL: `http://localhost:3001/images/${email}.png`,
     });
 
     const user = {
       email: userInBase.email,
       subscription: userInBase.subscription,
+      avatarURL: `http://localhost:3001/images/${email}.png`,
     };
 
     res.status(201).send({ user });
@@ -133,29 +153,45 @@ class UserController {
       .status(200)
       .json({ email: user.email, subscription: user.subscription });
   }
-  async updateSubscription(req, res, next) {
-    try {
-      const userId = req.params.userId;
-      const { subscription } = req.body;
+  async updateSubscriptionOrAvatar(req, res, next) {
+    const filepath = "public/images";
+    const filename = generateFilename(req.file.mimetype);
+    const minFilename = `min-${filename}`;
+    const minImage = await imagemin(req.file.filename);
 
-      if (!["fre", "pro", "premium"].includes(subscription)) {
-        const error = new Error();
-        error.message = "Bad request";
-        return res.status(400).send(error);
-      }
-      const updatedUser = await userModel.findUserByIdAndUpdate(userId, {
-        subscription,
-      });
+    await Promise.all([
+      moveFiles(req.file.path, path.join(filepath, filename)),
+      moveFiles(minImage[0].destinationPath, path.join(filepath, minFilename)),
+    ]);
 
-      if (!updatedUser) {
-        const error = new Error();
-        error.message = "Not Found";
-        return res.status(404).send(error);
-      }
-      return res.status(204).send();
-    } catch (error) {
-      next(error);
+    const { subscription } = req.body;
+
+    if (!["fre", "pro", "premium"].includes(subscription)) {
+      const error = new Error();
+      error.message = "Bad request";
+      return res.status(400).send(error);
     }
+
+    const userInBase = req.user;
+
+    await userModel.findUserByIdAndUpdate(userInBase._id, {
+      subscription,
+      avatarURL: `http://localhost:3001/images/${filename}`,
+    });
+
+    // const user = {
+    //   email: userInBase.email,
+    //   subscription: userInBase.subscription,
+    //   avatarURL: userInBase.avatarURL,
+    // };
+
+    return res
+      .status(200)
+      .sendFile(path.join(process.cwd(), "public", "images", minFilename));
+    //.json({ user });
+  }
+  catch(error) {
+    next(error);
   }
 }
 
