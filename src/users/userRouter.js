@@ -8,7 +8,7 @@ const userRouter = Router();
 userRouter.post(
   "/auth/register",
   userController.validateRegisterAndLogin,
-  userController.register
+  errorWrapper(userController.register)
 );
 
 userRouter.post(
