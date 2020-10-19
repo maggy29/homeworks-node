@@ -26,6 +26,7 @@ userRouter.get(
   errorWrapper(userController.authorize),
   errorWrapper(userController.getCurrent)
 );
+userRouter.get("/verify/:token", errorWrapper(userController.verifyEmail));
 userRouter.patch(
   "/avatars",
   upload.single("avatar"),

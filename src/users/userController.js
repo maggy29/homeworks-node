@@ -5,6 +5,8 @@ const {
 const bcryptjs = require("bcryptjs");
 const Avatar = require("avatar-builder");
 const jwt = require("jsonwebtoken");
+const uuid = require("uuid").v4;
+const nodemailer = require("nodemailer");
 const userModel = require("./userModel");
 const config = require("../config");
 const path = require("path");
@@ -12,11 +14,20 @@ const fs = require("fs");
 const moveFiles = require("../helpers/moveFiles");
 const imagemin = require("../helpers/imagemin");
 const generateFilename = require("../helpers/generateFilename");
-const { min } = require("lodash");
 
 class UserController {
   constructor() {
     this._costFactor = 4;
+
+    this._transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: config.NODEMAILER_USER,
+        pass: config.NODEMAILER_PASSWORD,
+      },
+    });
   }
   get register() {
     return this._register.bind(this);
@@ -75,6 +86,8 @@ class UserController {
       avatarURL: `http://localhost:3001/images/${email}.png`,
     });
 
+    await this.sendVerificationEmail(userInBase);
+
     const user = {
       email: userInBase.email,
       subscription: userInBase.subscription,
@@ -83,10 +96,36 @@ class UserController {
 
     res.status(201).send({ user });
   }
+  async sendVerificationEmail(user) {
+    const verificationToken = uuid();
+    await userModel.createVerificationToken(user._id, verificationToken);
+
+    await this._transporter.sendMail({
+      from: config.NODEMAILER_USER, // sender address
+      to: user.email, // list of receivers
+      subject: "Email verification", // Subject line
+      html: `<a href='http://localhost:3001/api/users/verify/${verificationToken}'>Click here for email verification</a>`, // plain text body
+    });
+  }
+  async verifyEmail(req, res, next) {
+    const { token } = req.params;
+
+    const userToVerify = await userModel.findByVerificationToken(token);
+
+    if (!userToVerify) {
+      const error = new Error();
+      error.message = "User not found";
+      return res.status(404).send(error);
+    }
+
+    await userModel.verifyUser(userToVerify._id);
+
+    return res.status(200).send("You are verified now!");
+  }
   async login(req, res, next) {
     const { email, password } = req.body;
     const userInBase = await userModel.findOne({ email });
-    if (!userInBase) {
+    if (!userInBase || userInBase.status !== "Verified") {
       const error = new Error();
       error.message = "Email or password is wrong";
       return res.status(401).send(error);
